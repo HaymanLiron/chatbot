@@ -11,7 +11,9 @@ import urllib.request
 WEATHER_APIKEY = "f788fb5757f2400068af4d33c24173df"
 CURSE_WORDS = ["fuck", "shit"]
 
+
 boto_memory = {}  # used for cookie storage
+
 
 funny_jokes = [
     "What kind of bees make milk? Boobees!",
