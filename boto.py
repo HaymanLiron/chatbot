@@ -11,6 +11,7 @@ import urllib.request
 WEATHER_APIKEY = "f788fb5757f2400068af4d33c24173df"
 CURSE_WORDS = ["fuck", "shit"]
 
+boto_memory = {}  # used for cookie storage
 
 funny_jokes = [
     "What kind of bees make milk? Boobees!",
@@ -24,8 +25,8 @@ funny_jokes = [
 
 
 def get_weather():
-    weather_URL = "http://api.openweathermap.org/data/2.5/forecast/city?id=524901&units=metric&APPID=" + WEATHER_APIKEY
-    API_info = urllib.request.urlopen(weather_URL).read().decode('utf-8')
+    weather_url = "http://api.openweathermap.org/data/2.5/forecast/city?id=524901&units=metric&APPID=" + WEATHER_APIKEY
+    API_info = urllib.request.urlopen(weather_url).read().decode('utf-8')
     weather_data = json.loads(API_info)['list'][0]  # converts to dictionary
     date = weather_data["dt_txt"]
     weather = weather_data["weather"][0]["description"]
@@ -34,13 +35,11 @@ def get_weather():
            "\nThe temperature is: " + str(temperature) + " degrees"
 
 
-botomem = {"user_name":"gilad","age":36}
-
-
-def injectMemory(msg):
-    for key in botomem:
+def inject_memory(msg):
+    for key in boto_memory:
         if "**"+key+"**" in msg:
-            msg = msg.replace(key,botomem.get(key, ""))
+            msg = msg.replace("**"+key+"**",boto_memory.get(key, ""))
+    return msg
 
 
 def get_time():
@@ -60,7 +59,6 @@ def parse_question(words_in_message):
 
 
 def calc_response(user_message):
-    response.set_cookie("name", "gilad")
     user_message = user_message.lower()
     # make punctuation separate from the word, to assist with parsing
     user_message = user_message.replace("?", " ?")
@@ -73,7 +71,11 @@ def calc_response(user_message):
     if "name" in words_in_message and user_message.endswith("?"):
         return "My name is Boto!"
     if "name" in words_in_message and "is" in words_in_message:
-        return "Welcome " + words_in_message[words_in_message.index("is") + 1]
+        # assume the user name is right after the word "is"
+        user_name = words_in_message[words_in_message.index("is") + 1]
+        response.set_cookie("user_name", user_name)
+        boto_memory["user_name"] = user_name
+        return "Welcome **user_name**"
     if user_message.endswith("?"):
         return parse_question(words_in_message)
     elif user_message.endswith("!"):
@@ -89,8 +91,9 @@ def index():
 
 @route("/chat", method='POST')
 def chat():
+    response.headers['Access-Control-Allow-Origin'] = '*'  # added in case other classmates want to use my server
     user_message = request.POST.get('msg')
-    boto_response = calc_response(user_message)
+    boto_response = inject_memory(calc_response(user_message))
     return json.dumps({"animation": "inlove", "msg": boto_response})
 
 
