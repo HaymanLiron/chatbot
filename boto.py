@@ -4,15 +4,12 @@ This is the template server side for ChatBot
 from bottle import route, run, template, static_file, request, response
 import json
 import random
-import datetime
-import urllib.request
+import datetime  # needed for getting the date and time if user asks
+import urllib.request  # needed for sending the HTTP request to the openweather API
 
 
 WEATHER_APIKEY = "f788fb5757f2400068af4d33c24173df"
 CURSE_WORDS = ["fuck", "shit"]
-
-
-boto_memory = {}  # used for cookie storage
 
 
 funny_jokes = [
@@ -37,11 +34,30 @@ def get_weather():
            "\nThe temperature is: " + str(temperature) + " degrees"
 
 
-def inject_memory(msg):
-    for key in boto_memory:
-        if "**"+key+"**" in msg:
-            msg = msg.replace("**"+key+"**",boto_memory.get(key, ""))
+# cookie storage works as follows: there's no method to iterate over all cookies
+# so you have to keep a cookie which keeps the names of all the relevant cookies
+# it needs to be converted to a string when saved as a cookie,
+# and then converted back to a JSON object when you actually want to use it
+# TODO: reset this cookie when cookies are reset
+def inject_cookie_memory(msg):
+    cookies = request.get_cookie("stored_cookie_keys", [])
+    if cookies:
+        cookies = json.loads(cookies)["cookies"]
+        for key in cookies:
+            if "**"+key+"**" in msg:
+                msg = msg.replace("**"+key+"**", request.get_cookie(key))
     return msg
+
+
+def add_to_stored_cookie_keys(key):
+    current_cookies = request.get_cookie("stored_cookie_keys", [])
+    if current_cookies:  # meaning that this cookie has already been set
+        # we want to access the list of relevant cookies
+        current_cookies = json.loads(current_cookies)["cookies"]
+    if key not in current_cookies:
+        current_cookies.append(key)
+    response.set_cookie("stored_cookie_keys", json.dumps({"cookies": current_cookies}))
+    return None
 
 
 def get_time():
@@ -58,28 +74,35 @@ def parse_question(words_in_message):
         return "The date is: " + str(now.day) + "/" + str(now.month) + "/" + str(now.year)
     if "weather" in words_in_message:
         return get_weather()
+    return "Good question, I don't know the answer, sorry."
 
 
 def calc_response(user_message):
     user_message = user_message.lower()
     # make punctuation separate from the word, to assist with parsing
     user_message = user_message.replace("?", " ?")
+    # convert the string into a list of words to assist with parsing
     words_in_message = user_message.split(" ")
     # check for curse words
     if set(CURSE_WORDS).intersection(words_in_message):
         return "Please do not curse in front of me."
+    # check if user wants a joke
     if set(["joke", "jokes"]).intersection(words_in_message):
         return "I have a joke!\n" + funny_jokes[random.randint(0, len(funny_jokes) - 1)]
     if "name" in words_in_message and user_message.endswith("?"):
         return "My name is Boto!"
-    if "name" in words_in_message and "is" in words_in_message:
-        # assume the user name is right after the word "is"
-        user_name = words_in_message[words_in_message.index("is") + 1]
-        response.set_cookie("user_name", user_name)
-        boto_memory["user_name"] = user_name
-        return "Welcome **user_name**"
     if user_message.endswith("?"):
         return parse_question(words_in_message)
+    if "name" in words_in_message and "is" in words_in_message[words_in_message.index("name"):]:
+        output = ""
+        # assume the user name is right after the word "is", only if "is" follows "name"
+        # this differentiates between "My name is Liron" and "What is your name?"
+        user_name = words_in_message[words_in_message.index("is") + 1]
+        response.set_cookie("user_name", user_name)
+        add_to_stored_cookie_keys("user_name")
+        if request.get_cookie("user_name"):
+            output += "Your old username was: " + request.get_cookie("user_name") + ".\n"
+        return output + "Welcome " + user_name
     elif user_message.endswith("!"):
         return "You sound excited, please tell me more."
     else:
@@ -95,7 +118,7 @@ def index():
 def chat():
     response.headers['Access-Control-Allow-Origin'] = '*'  # added in case other classmates want to use my server
     user_message = request.POST.get('msg')
-    boto_response = inject_memory(calc_response(user_message))
+    boto_response = inject_cookie_memory(calc_response(user_message))
     return json.dumps({"animation": "inlove", "msg": boto_response})
 
 
