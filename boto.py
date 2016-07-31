@@ -85,14 +85,14 @@ def calc_response(user_message):
     words_in_message = user_message.split(" ")
     # check for curse words
     if set(CURSE_WORDS).intersection(words_in_message):
-        return "Please do not curse in front of me."
+        return "no", "Please do not curse in front of me."
     # check if user wants a joke
     if set(["joke", "jokes"]).intersection(words_in_message):
-        return "I have a joke!\n" + funny_jokes[random.randint(0, len(funny_jokes) - 1)]
+        return "giggling", "I have a joke!\n" + funny_jokes[random.randint(0, len(funny_jokes) - 1)]
     if "name" in words_in_message and user_message.endswith("?"):
-        return "My name is Boto!"
+        return "laughing", "My name is Boto!"
     if user_message.endswith("?"):
-        return parse_question(words_in_message)
+        return "confused", parse_question(words_in_message)
     if "name" in words_in_message and "is" in words_in_message[words_in_message.index("name"):]:
         output = ""
         # assume the user name is right after the word "is", only if "is" follows "name"
@@ -102,11 +102,11 @@ def calc_response(user_message):
         add_to_stored_cookie_keys("user_name")
         if request.get_cookie("user_name"):
             output += "Your old username was: " + request.get_cookie("user_name") + ".\n"
-        return output + "Welcome " + user_name
+        return "excited", output + "Welcome " + user_name
     elif user_message.endswith("!"):
-        return "You sound excited, please tell me more."
+        return "excited", "You sound excited, please tell me more."
     else:
-        return "I'm sorry, I did not understand you."
+        return "confused", "I'm sorry, I did not understand you."
 
 
 @route('/', method='GET')
@@ -118,8 +118,9 @@ def index():
 def chat():
     response.headers['Access-Control-Allow-Origin'] = '*'  # added in case other classmates want to use my server
     user_message = request.POST.get('msg')
-    boto_response = inject_cookie_memory(calc_response(user_message))
-    return json.dumps({"animation": "inlove", "msg": boto_response})
+    animation, boto_response = calc_response(user_message)
+    boto_response = inject_cookie_memory(boto_response)
+    return json.dumps({"animation": animation, "msg": boto_response})
 
 
 @route("/test", method='POST')
